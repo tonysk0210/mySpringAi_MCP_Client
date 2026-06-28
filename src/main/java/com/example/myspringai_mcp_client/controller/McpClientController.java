@@ -25,10 +25,11 @@ public class McpClientController {
                 .build();
     }
 
+
     @PostMapping("/chat")
-    public String chat(@RequestBody ChatPayload chatPayload) {
+    public String chat(@RequestBody ChatPayload chatPayload, @RequestHeader(value = "username", required = false) String username) {
         return chatClient.prompt()
-                .user(chatPayload.message())
+                .user(chatPayload.message() + ". 我的 username 是 " + username)
                 .call().content();
     }
 
