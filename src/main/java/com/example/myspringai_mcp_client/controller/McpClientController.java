@@ -1,6 +1,7 @@
 package com.example.myspringai_mcp_client.controller;
 
 import com.example.myspringai_mcp_client.advisor.PrettyLoggerAdvisor;
+import com.example.myspringai_mcp_client.advisor.TokenUsageAuditAdvisor;
 import com.example.myspringai_mcp_client.payload.ChatPayload;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
@@ -20,7 +21,7 @@ public class McpClientController {
                         當使用者詢問 GitHub 相關操作時，必須使用 GitHub MCP 工具（如 get_file_contents、list_files、search_repositories 等），絕對不可使用 filesystem 工具。
                         當使用者詢問本機檔案操作時，才使用 filesystem 工具。
                         """)
-                .defaultAdvisors(new PrettyLoggerAdvisor()) // new SimpleLoggerAdvisor() 停用
+                .defaultAdvisors(new PrettyLoggerAdvisor(), new TokenUsageAuditAdvisor()) // new SimpleLoggerAdvisor() 停用
                 .defaultTools(toolCallbackProvider) // ToolCallbackProvider: Spring AI 收集到的「可供 LLM 呼叫的工具清單來源」。
                 .build();
     }
