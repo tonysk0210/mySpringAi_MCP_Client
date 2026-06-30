@@ -97,14 +97,12 @@ public class McpServerToolFilter implements McpToolFilter {
 }
 
 /**
- * MCP server 啟動 / 連線
- * ↓
- * Spring AI MCP 向 server 查詢可用 tools
- * ↓
- * 拿到 tools 清單
- * ↓
- * 逐一呼叫 McpToolFilter.test(mcpConnectionInfo, tool)
- * ↓
- * true  -> 這個 tool 會被保留
- * false -> 這個 tool 不會暴露給 ChatClient / LLM 使用
+ * Spring Boot startup
+ * -> 建立 McpServerToolFilter bean
+ * -> 建立/注入 ToolCallbackProvider
+ * -> ChatClient.defaultTools(toolCallbackProvider) 記住這個工具來源
+ * -> 直到 request 送進 ChatClient / LLM call
+ * -> Spring AI 需要組出可用 tools
+ * -> ToolCallbackProvider 展開 MCP tools
+ * -> McpToolFilter.test(...) 才逐一檢查 tool
  */

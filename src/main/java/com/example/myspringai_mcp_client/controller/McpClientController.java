@@ -3,10 +3,15 @@ package com.example.myspringai_mcp_client.controller;
 import com.example.myspringai_mcp_client.advisor.PrettyLoggerAdvisor;
 import com.example.myspringai_mcp_client.advisor.TokenUsageAuditAdvisor;
 import com.example.myspringai_mcp_client.payload.ChatPayload;
+import com.example.myspringai_mcp_client.util.ToolUtil;
+import io.modelcontextprotocol.client.McpSyncClient;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api")
@@ -14,7 +19,18 @@ public class McpClientController {
 
     private final ChatClient chatClient;
 
-    public McpClientController(ChatClient.Builder chatClientBuilder, ToolCallbackProvider toolCallbackProvider) {
+    // List<McpSyncClient> mcpClients 代表：Spring AI 幫你建立好的「所有 MCP server 連線 client」。
+    /* 所以概念上像這樣：
+    mcpClients = [
+      McpSyncClient for filesystem MCP server,
+      McpSyncClient for github MCP server,
+      McpSyncClient for helpdesk-ticket-mcp-server-stdio
+    ]
+     */
+    private final List<McpSyncClient> mcpClients;
+
+
+    public McpClientController(ChatClient.Builder chatClientBuilder, ToolCallbackProvider toolCallbackProvider, List<McpSyncClient> mcpClients) {
         this.chatClient = chatClientBuilder
                 .defaultSystem("""
                         回答時請使用清楚、易理解且專業的繁體中文。
@@ -24,13 +40,31 @@ public class McpClientController {
                 .defaultAdvisors(new PrettyLoggerAdvisor(), new TokenUsageAuditAdvisor()) // new SimpleLoggerAdvisor() 停用
                 .defaultTools(toolCallbackProvider) // ToolCallbackProvider: Spring AI 收集到的「可供 LLM 呼叫的工具清單來源」。
                 .build();
+        this.mcpClients = mcpClients;
     }
 
 
     @PostMapping("/chat")
     public String chat(@RequestBody ChatPayload chatPayload, @RequestHeader(value = "username", required = false) String username) {
+
+        // 1. 選擇合適的 ToolCallback
+        ToolCallback[] toolCallbacks = ToolUtil.selectToolsFor(mcpClients, "secure-filesystem-server", "list_directory");
+
         return chatClient.prompt()
                 .user(chatPayload.message() + ". 我的 username 是 " + username)
+                // .tools(toolCallbacks)
                 .call().content();
     }
 }
+
+/**
+ * defaultTools + tools        -> request tools 會加到 default tools，不是取代；同名 tool 會造成重複名稱錯誤
+ * defaultSystem + system      -> request system 取代 default system
+ * defaultAdvisors + advisors  -> request advisors 加到 default advisors 後面/同一條 chain
+ *
+ * 1. ToolCallbackProvider 內部會用 prefix generator 處理它自己展開出的 MCP tools； same tool name 會加上 prefix
+ * 2. 但你手動建立的 ToolCallback[] 沒有走同一個命名去重流程。 same tool name 會造成重複名稱錯誤
+ *
+ * 要全域 MCP tools -> 用 defaultTools(toolCallbackProvider)
+ * 要 request-level 精準選 tools -> 不設 defaultTools，只用 .tools(toolCallbacks)
+ */
