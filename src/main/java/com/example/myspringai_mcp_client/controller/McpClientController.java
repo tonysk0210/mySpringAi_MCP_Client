@@ -33,5 +33,4 @@ public class McpClientController {
                 .user(chatPayload.message() + ". 我的 username 是 " + username)
                 .call().content();
     }
-
 }
