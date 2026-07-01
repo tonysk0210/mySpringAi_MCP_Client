@@ -12,6 +12,8 @@ import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api")
@@ -53,6 +55,9 @@ public class McpClientController {
         return chatClient.prompt()
                 .user(chatPayload.message() + ". 我的 username 是 " + username)
                 // .tools(toolCallbacks)
+                // 為本次 MCP tool call 附加 progressToken；若 MCP server 支援進度通知，可用它標識這次工具執行。
+                // 如果這次 AI 呼叫 MCP tool，就把一個唯一 progressToken 一起帶給 MCP server，讓支援進度通知的 server 可以用它追蹤並回報這次工具執行進度。
+                .toolContext(Map.of("progressToken", UUID.randomUUID().toString()))
                 .call().content();
     }
 }
@@ -61,10 +66,10 @@ public class McpClientController {
  * defaultTools + tools        -> request tools 會加到 default tools，不是取代；同名 tool 會造成重複名稱錯誤
  * defaultSystem + system      -> request system 取代 default system
  * defaultAdvisors + advisors  -> request advisors 加到 default advisors 後面/同一條 chain
- *
+ * <p>
  * 1. ToolCallbackProvider 內部會用 prefix generator 處理它自己展開出的 MCP tools； same tool name 會加上 prefix
  * 2. 但你手動建立的 ToolCallback[] 沒有走同一個命名去重流程。 same tool name 會造成重複名稱錯誤
- *
+ * <p>
  * 要全域 MCP tools -> 用 defaultTools(toolCallbackProvider)
  * 要 request-level 精準選 tools -> 不設 defaultTools，只用 .tools(toolCallbacks)
  */
