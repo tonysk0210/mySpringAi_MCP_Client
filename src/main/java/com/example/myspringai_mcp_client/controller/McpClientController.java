@@ -60,6 +60,30 @@ public class McpClientController {
                 .toolContext(Map.of("progressToken", UUID.randomUUID().toString()))
                 .call().content();
     }
+
+    /**
+     * 專門用於展示 MCP sampling 的端點。這裡仍然是由聊天 LLM 主導：它看到
+     * {@code summarizeTickets} 這個工具後，自行決定要呼叫它。該工具實際上是在
+     * server 端執行，執行過程中會回呼（callback）到這個 client 端的
+     * {@code @McpSampling} 處理器，以產生自然語言摘要。這個 controller
+     * 本身從未直接呼叫該工具。
+     */
+    @GetMapping("/summarize-tickets")
+    public String summarizeTickets(@RequestHeader("username") String username) {
+        ToolCallback[] toolCallbacks = ToolUtil.selectToolsFor(mcpClients, "helpdesk-ticket-mcp-server-stdio", null);
+        return chatClient.prompt()
+                .system("""
+                        你負責調度 'summarizeTickets' 這個工具。該工具針對這次請求，
+                        已經產生了一段完整、可直接呈現給客戶的摘要。請將該工具的
+                        輸出「原封不動」回傳給使用者：不得重寫、重新排版、精簡、
+                        擴寫、改述，也不得加上任何你自己的評論。你的回覆必須是
+                        工具回應的逐字內容，不得有其他任何文字。
+                        """)
+                .user("請幫我摘要所有的服務工單。我的使用者名稱是 " + username)
+                .tools(toolCallbacks)
+                .toolContext(Map.of("progressToken", UUID.randomUUID().toString()))
+                .call().content();
+    }
 }
 
 /**
