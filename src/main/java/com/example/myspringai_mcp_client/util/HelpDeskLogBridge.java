@@ -19,8 +19,23 @@ public class HelpDeskLogBridge {
     // 遠端 HTTP server：使用 spring.ai.mcp.client.streamable-http.connections.<name> 中的 <name>，例如 myremotemcp。
     @McpLogging(clients = "helpdesk-ticket-mcp-server-stdio")
     public void onServerLog(McpSchema.LoggingLevel level,
-            String source,
-            String message) {
+                            String source,
+                            String message) {
         log.info("收到伺服器日誌 - 等級: {}, 來源: {}, 訊息: {}", level, source, message);
     }
 }
+
+/**
+ * MCP server tool
+ * -> ctx.info("message")
+ * -> MCP protocol logging/message notification
+ * -> MCP client 收到 notification
+ * -> Spring AI 找到 @McpLogging handler
+ * -> 呼叫 onServerLog(level, source/logger, message/data)
+ * <p>
+ * MCP logging notification 本身大概有這些欄位：
+ * <p>
+ * level   -> INFO / DEBUG / WARNING / ERROR
+ * logger  -> 你這裡收到的 source
+ * data    -> 你這裡收到的 message
+*/

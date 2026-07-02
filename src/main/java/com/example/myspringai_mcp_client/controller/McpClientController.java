@@ -27,6 +27,7 @@ public class McpClientController {
       McpSyncClient for filesystem MCP server,
       McpSyncClient for github MCP server,
       McpSyncClient for helpdesk-ticket-mcp-server-stdio
+      McpSyncClient for myremotemcp
     ]
      */
     private final List<McpSyncClient> mcpClients;
