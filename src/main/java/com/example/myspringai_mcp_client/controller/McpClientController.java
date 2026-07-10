@@ -89,40 +89,45 @@ public class McpClientController {
             return handleElicitationChatResponse(chatPayload.message());
         }
 
+        /**
+         *   進入 hasPending() 這個 block 代表：
+         *
+         *   時序軸
+         *   ──────────────────────────────────────────────────────────
+         *   [第一次 POST /api/chat] → LLM 呼叫 createTicket tool
+         *       │
+         *       ▼  MCP server 發出 elicitation → handleElicitationRequest() 被呼叫
+         *       │   sessionStore.register()  → session 建立，hasPending() = true
+         *       │   sseService.push()        → SSE 把 prompt + schema 推給前端
+         *       │   future.get()             → 此 thread 阻塞，等待...
+         *       │
+         *       │  （使用者看到聊天框出現提示，輸入回應後按 Enter）
+         *       │
+         *       ▼
+         *   [第二次 POST /api/chat] → hasPending() = true → 進入這個 block
+         *       │
+         *       │  handleElicitationChatResponse(userMessage)
+         *       │   parserClient + LLM → 把自然語言解析成 Map
+         *       │   sessionStore.complete() → future.get() 解除阻塞
+         *       │
+         *       ▼  立即回傳 "✅ 資料已收到，正在繼續處理..."  給這次 POST
+         *       │
+         *       ▼  第一次被阻塞的 POST 解除，MCP server 繼續 createTicket
+         *          LLM 最終回覆透過第一次的回應返回給前端
+         */
+
         // 選擇合適的 MCP tools：只選擇屬於 "secure-filesystem-server" 的 tools，且工具名稱為 "list_directory"
         ToolCallback[] toolCallbacks = ToolUtil.selectToolsFor(mcpClients, "secure-filesystem-server", "list_directory");
 
         return chatClient.prompt()
                 .user(chatPayload.message() + ". 我的 username 是 " + username)
-                .toolContext(Map.of("progressToken", UUID.randomUUID().toString()))
+                .toolContext(Map.of("progressToken", UUID.randomUUID().toString())) // 增加一個隨機的 progressToken 當作示例
                 .call().content();
     }
-    /**
-     *   進入 hasPending() 這個 block 代表：
-     *
-     *   時序軸
-     *   ──────────────────────────────────────────────────────────
-     *   [第一次 POST /api/chat] → LLM 呼叫 createTicket tool
-     *       │
-     *       ▼  MCP server 發出 elicitation → handleElicitationRequest() 被呼叫
-     *       │   sessionStore.register()  → session 建立，hasPending() = true
-     *       │   sseService.push()        → SSE 把 prompt + schema 推給前端
-     *       │   future.get()             → 此 thread 阻塞，等待...
-     *       │
-     *       │  （使用者看到聊天框出現提示，輸入回應後按 Enter）
-     *       │
-     *       ▼
-     *   [第二次 POST /api/chat] → hasPending() = true → 進入這個 block
-     *       │
-     *       │  handleElicitationChatResponse(userMessage)
-     *       │   parserClient + LLM → 把自然語言解析成 Map
-     *       │   sessionStore.complete() → future.get() 解除阻塞
-     *       │
-     *       ▼  立即回傳 "✅ 資料已收到，正在繼續處理..."  給這次 POST
-     *       │
-     *       ▼  第一次被阻塞的 POST 解除，MCP server 繼續 createTicket
-     *          LLM 最終回覆透過第一次的回應返回給前端
-     */
+
+    // //////////////////////////////////////////
+    // Helper methods
+    // //////////////////////////////////////////
 
     /**
      * 把使用者在聊天框的輸入解析成 elicitation 所需的 JSON 資料，
