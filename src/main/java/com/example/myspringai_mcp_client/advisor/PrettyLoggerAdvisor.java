@@ -1,4 +1,4 @@
-package com.example.myagentclient.advisor;
+package com.example.myspringai_mcp_client.advisor;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -22,6 +22,11 @@ public class PrettyLoggerAdvisor implements CallAdvisor {
     private static final int    MAX_LINE = 160; // 超過此寬度強制換行，確保每行都有 ║ 前綴
 
     private final AtomicInteger callCount = new AtomicInteger(0);
+
+    /** 每封郵件開始處理前呼叫，讓同一個 work cycle 的編號從 #1 重新計算。 */
+    public void reset() {
+        callCount.set(0);
+    }
 
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
