@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn dependency:get -Dartifact=io.modelcontextprotocol.sdk:mcp:2.0.0 -q)",
+      "Bash(jar tf *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(javap *)",
+      "PowerShell(jar xf *)",
+      "Bash(mvn dependency:tree -Dincludes=io.modelcontextprotocol.sdk)",
+      "Bash(javap -p \"C:\\\\Users\\\\tony.shangkuan\\\\.m2\\\\repository\\\\io\\\\modelcontextprotocol\\\\sdk\\\\mcp-core\\\\2.0.0\\\\mcp-core-2.0.0.jar\")",
+      "Bash(javap *)",
+      "Bash(Get-ChildItem -Path \"io\" -Recurse)",
+      "Bash(Select-Object FullName)",
+      "Bash(Remove-Item *)"
+    ]
+  }
+}
