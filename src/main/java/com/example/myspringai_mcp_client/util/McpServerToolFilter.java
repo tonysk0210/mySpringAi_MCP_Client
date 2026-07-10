@@ -13,8 +13,8 @@ import java.util.Optional;
 
 /**
  * 全域 MCP tool 過濾器：決定哪些 MCP tools 可以暴露給 LLM，哪些要封鎖。
- * 執行時機：啟動時執行一次，結果快取在 {@code SyncMcpToolCallbackProvider}。
- * 每次 LLM call 直接使用快取，不重新過濾。
+ * 執行時機：第一次 LLM request 時才執行（lazy），結果快取在 {@code SyncMcpToolCallbackProvider}。
+ * 啟動時只建立 bean，不會呼叫 test()；之後每次 LLM call 直接使用快取，不重新過濾。
  * 僅當 MCP server tool 清單在 runtime 變動時（{@code McpToolsChangedEvent}）才重新執行。
  * <p>
  * 兩層封鎖（設定於 application.properties）：
