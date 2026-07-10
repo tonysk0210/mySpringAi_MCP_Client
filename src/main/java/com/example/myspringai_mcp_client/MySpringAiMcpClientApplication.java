@@ -7,17 +7,48 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class MySpringAiMcpClientApplication {
 
     public static void main(String[] args) {
+
+        // 分兩步啟動，以便在 run() 之前注入 Profile。
+        // 若直接呼叫 SpringApplication.run()，則無法在啟動前動態設定 Profile。
         SpringApplication app = new SpringApplication(MySpringAiMcpClientApplication.class);
 
-        // 1. 讀取 JVM 的系統屬性
+        // 根據作業系統自動啟用對應的 Spring Profile，
+        // 使 Spring Boot 額外載入 application-{profile}.properties，
+        // 讓 MCP server 指令、路徑等平台差異設定可以各自獨立管理，不必寫在共用設定檔裡。
         String os = System.getProperty("os.name").toLowerCase();
 
         if (os.contains("windows")) {
-            app.setAdditionalProfiles("windows"); // 額外啟動名為 windows 的 Profile。Spring Boot 啟動時會自動去找並載入 application-windows.properties，把裡面的設定合併進來。
+            // 載入 application-windows.properties
+            // 內含 Windows 專用的 MCP stdio server 啟動指令（cmd / npx / docker 路徑格式）
+            app.setAdditionalProfiles("windows");
         } else if (os.contains("mac")) {
-            app.setAdditionalProfiles("mac"); // 額外啟動名為 mac 的 Profile。Spring Boot 啟動時會自動去找並載入 application-mac.properties，把裡面的設定合併進來。
+            // 載入 application-mac.properties
+            // 內含 macOS 專用的 MCP stdio server 啟動指令（unix 路徑格式）
+            app.setAdditionalProfiles("mac");
         }
+
         app.run(args);
     }
+
+    /*
+      啟動
+    │
+    ├─ 1. application.properties 載入（共用設定）
+    │
+    ├─ 2. application-windows.properties 載入（覆蓋/補充共用設定）
+    │      └─ 其中一行指向 JSON：
+    │         spring.ai.mcp.client.stdio.servers-configuration=classpath:mcp-servers-windows.json
+    │
+    └─ 3. Spring AI MCP autoconfiguration 初始化 MCP client
+           │
+           ├─ 3a. 讀取 mcp-servers-windows.json（定義所有 server 的基礎連線）
+           │       ├─ filesystem: cmd + npx + ...
+           │       ├─ github: docker run ...
+           │       └─ helpdesk-ticket-mcp-server-stdio: java -jar ...
+           │
+           └─ 3b. 套用 application-windows.properties 裡的
+                  spring.ai.mcp.client.stdio.connections.filesystem.* 覆蓋 JSON 同名設定
+                  （此例是把 filesystem 的路徑改成動態的 ${MCP_FILESYSTEM_ROOT}）
+    */
 
 }
