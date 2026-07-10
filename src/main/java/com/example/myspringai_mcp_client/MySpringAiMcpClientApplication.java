@@ -29,26 +29,13 @@ public class MySpringAiMcpClientApplication {
 
         app.run(args);
     }
-
+}
     /*
-      啟動
+      application.properties 啟動順序
     │
     ├─ 1. application.properties 載入（共用設定）
     │
     ├─ 2. application-windows.properties 載入（覆蓋/補充共用設定）
     │      └─ 其中一行指向 JSON：
     │         spring.ai.mcp.client.stdio.servers-configuration=classpath:mcp-servers-windows.json
-    │
-    └─ 3. Spring AI MCP autoconfiguration 初始化 MCP client
-           │
-           ├─ 3a. 讀取 mcp-servers-windows.json（定義所有 server 的基礎連線）
-           │       ├─ filesystem: cmd + npx + ...
-           │       ├─ github: docker run ...
-           │       └─ helpdesk-ticket-mcp-server-stdio: java -jar ...
-           │
-           └─ 3b. 套用 application-windows.properties 裡的
-                  spring.ai.mcp.client.stdio.connections.filesystem.* 覆蓋 JSON 同名設定
-                  （此例是把 filesystem 的路徑改成動態的 ${MCP_FILESYSTEM_ROOT}）
     */
-
-}
