@@ -12,97 +12,103 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * 當 MCP server 提供 tools 給 Spring AI client 時，這個 class 會決定哪些 tool 可以被使用、哪些 tool 要被擋掉。
- * 它控制的是你的 Spring Boot application 要不要把某個 MCP tool 暴露給 LLM 使用
+ * 全域 MCP tool 過濾器：決定哪些 MCP tools 可以暴露給 LLM，哪些要封鎖。
+ * 執行時機：啟動時執行一次，結果快取在 {@code SyncMcpToolCallbackProvider}。
+ * 每次 LLM call 直接使用快取，不重新過濾。
+ * 僅當 MCP server tool 清單在 runtime 變動時（{@code McpToolsChangedEvent}）才重新執行。
+ * <p>
+ * 兩層封鎖（設定於 application.properties）：
+ * server 層：server 名稱包含封鎖片段 → 該 server 所有 tools 全封鎖
+ * tool 層：tool 名稱以封鎖前綴開頭 → 僅該 tool 被封鎖
+ * <p>
+ * 與 ToolUtil.selectToolsFor() 的差異：
+ * 此 filter 是全域生效，影響所有 request 的 tool 清單。
+ * {@code ToolUtil.selectToolsFor()} 是 per-request 手動精選，只影響單次呼叫。
  */
 @Slf4j
 @Component
 public class McpServerToolFilter implements McpToolFilter {
 
+    // 封鎖整個 server 的片段清單（contains 比對，出現在名稱任何位置即命中）。
     @Value("${mcp.tool-filter.blocked-servers:}")
     private List<String> blockedServers;
 
+    // 封鎖特定 tool 的前綴清單（startsWith 比對，只看 tool 名稱開頭）。
     @Value("${mcp.tool-filter.blocked-tool-prefixes:}")
     private List<String> blockedToolPrefixes;
 
     /**
-     * Spring AI MCP 會把 tool 一個一個 丟進這個方法檢查。
-     * McpServerToolFilter 這個物件是被 Spring 管理的 bean；但 mcpConnectionInfo 和 tool 不是被注入成欄位，而是 Spring AI MCP 執行過濾時傳進 test() 的參數。
+     * 每個 MCP tool 都會經過這個方法決定是否允許 LLM 使用。
+     * <p>注意：{@code McpServerToolFilter} 本身是 Spring bean（由 Spring 管理生命週期），
+     *
+     * @param mcpConnectionInfo 提供這個 tool 所屬的 MCP server 連線資訊（包含 server 名稱）
+     * @param tool              MCP server 對外宣告的單一 tool（包含 tool 名稱與 schema）
+     * @return {@code true} 允許此 tool 暴露給 LLM；{@code false} 靜默排除，LLM 看不到
      */
     @Override
     public boolean test(McpConnectionInfo mcpConnectionInfo, McpSchema.Tool tool) {
 
-        // 1. 從 mcpConnectionInfo 取得 MCP server 名稱
+        // 1. 取得 MCP server 在協定層的名稱，與 application.properties 的 connection name 相同。
         String serverName = mcpConnectionInfo.initializeResult()
                 .serverInfo()
                 .name();
 
-        // 2. 從 tool 取得 tool 名稱
+        // 2. 取得 MCP tool 的名稱。
         String toolName = tool.name();
 
-        // 3. 輸出 log，表示正在檢查這個 tool
         log.info("驗證來自 MCP server: '{}' 的 tool: '{}'", serverName, toolName);
 
-        // 4. 如果 MCP server 名稱包含設定檔中的封鎖關鍵字，則拒絕這個 tool
+        // 第一層：封鎖整個 server（server 名稱含封鎖片段，該 server 下所有 tools 一律拒絕）
         Optional<String> blockedServer = findMatchedBlockedServer(serverName);
         if (blockedServer.isPresent()) {
-            log.warn(
-                    "工具 '{}' 已被拒絕，因為 MCP 伺服器 '{}' 符合封鎖設定 '{}'",
-                    toolName, serverName, blockedServer.get()
-            );
-            return false; // 拒絕這個 tool
+            log.warn("工具 '{}' 已被拒絕，因為 MCP 伺服器 '{}' 符合封鎖設定 '{}'",
+                    toolName, serverName, blockedServer.get());
+            return false;
         }
 
-        // 5. 如果 tool 名稱符合設定檔中的封鎖前綴，則拒絕這個 tool
+        // 第二層：封鎖單一 tool（tool 名稱以封鎖前綴開頭，其餘同 server 的 tools 不受影響）
         Optional<String> blockedToolPrefix = findMatchedBlockedToolPrefix(toolName);
         if (blockedToolPrefix.isPresent()) {
-            log.warn(
-                    "工具 '{}' 已被拒絕，因為它符合封鎖工具前綴 '{}'",
-                    toolName, blockedToolPrefix.get()
-            );
-            return false; // 拒絕這個 tool
+            log.warn("工具 '{}' 已被拒絕，因為它符合封鎖工具前綴 '{}'",
+                    toolName, blockedToolPrefix.get());
+            return false;
         }
 
-        log.info(
-                "工具 '{}' 已通過 MCP 伺服器 '{}' 的檢查",
-                toolName, serverName
-        );
-        return true; // 允許這個 tool
+        log.info("工具 '{}' 已通過 MCP 伺服器 '{}' 的檢查", toolName, serverName);
+        return true;
     }
 
-    // 搜尋封鎖的 server 名稱清單中，是否有任何一个與 MCP server 名稱匹配
+    // //////////////////////////////////////////
+    // 模糊比對 helper
+    // //////////////////////////////////////////
+
+    /**
+     * server 名稱是否包含任一封鎖片段（contains，不分大小寫）。
+     * 回傳命中的片段供 log 使用，未命中回傳 empty。
+     */
     private Optional<String> findMatchedBlockedServer(String serverName) {
-
-        // 1. 將 server 名稱轉換成小寫，以便不區分大小寫地比較
-        String normalizedServerName = serverName.toLowerCase(Locale.ROOT);
-
-        // 2. 逐一檢查每個封鎖的 server 名稱，看是否與 MCP server 名稱匹配
+        String normalized = serverName.toLowerCase(Locale.ROOT);
         return blockedServers.stream()
-                .map(String::trim) // 3. 移除封鎖的 server 名稱前後的空白字元
-                .filter(blockedServer -> !blockedServer.isEmpty()) // 4. 拒絕空字串
-                .filter(blockedServer -> normalizedServerName.contains(blockedServer.toLowerCase(Locale.ROOT))) // 5. 檢查 MCP server 名稱是否包含封鎖的 server 名稱
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                // contains 比對：封鎖關鍵字只要是 server 名稱的一部分即視為命中
+                // 例如："github" 可命中 "github-mcp-server"
+                .filter(s -> normalized.contains(s.toLowerCase(Locale.ROOT)))
                 .findFirst();
     }
 
-    // 搜尋封鎖的 tool 前綴清單中，是否有任何一个與 tool 名稱匹配
+    /**
+     * tool 名稱是否以任一封鎖前綴開頭（startsWith，不分大小寫）。
+     * 回傳命中的前綴供 log 使用，未命中回傳 empty。
+     */
     private Optional<String> findMatchedBlockedToolPrefix(String toolName) {
-        String normalizedToolName = toolName.toLowerCase(Locale.ROOT);
-
+        String normalized = toolName.toLowerCase(Locale.ROOT);
         return blockedToolPrefixes.stream()
                 .map(String::trim)
-                .filter(blockedToolPrefix -> !blockedToolPrefix.isEmpty())
-                .filter(blockedToolPrefix -> normalizedToolName.startsWith(blockedToolPrefix.toLowerCase(Locale.ROOT)))
+                .filter(p -> !p.isEmpty())
+                // startsWith 比對：tool 名稱必須以封鎖前綴「開頭」才命中
+                // 例如：前綴 "delete_" 可命中 "delete_file"，但不會命中 "list_delete"
+                .filter(p -> normalized.startsWith(p.toLowerCase(Locale.ROOT)))
                 .findFirst();
     }
 }
-
-/**
- * Spring Boot startup
- * -> 建立 McpServerToolFilter bean
- * -> 建立/注入 ToolCallbackProvider
- * -> ChatClient.defaultTools(toolCallbackProvider) 記住這個工具來源
- * -> 直到 request 送進 ChatClient / LLM call
- * -> Spring AI 需要組出可用 tools
- * -> ToolCallbackProvider 展開 MCP tools
- * -> McpToolFilter.test(...) 才逐一檢查 tool
- */

@@ -7,6 +7,7 @@ import com.example.myspringai_mcp_client.util.ElicitationSessionStore;
 import com.example.myspringai_mcp_client.util.ElicitationSseService;
 import com.example.myspringai_mcp_client.util.ToolUtil;
 import io.modelcontextprotocol.client.McpSyncClient;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.tool.ToolCallback;
@@ -23,15 +24,16 @@ import java.util.UUID;
 @Slf4j
 @RestController
 @RequestMapping("/api")
+@RequiredArgsConstructor
 public class McpClientController {
 
     private final ChatClient chatClient;
 
     // 僅用於解析 elicitation 回應的輕量 client：不帶 MCP tools、不帶 advisor，
     // 只做「把使用者自然語言輸入轉成 JSON」這件事，避免觸發不必要的 tool call。
-    private final ChatClient parserClient;
+    private ChatClient parserClient;
 
-    private final List<McpSyncClient> mcpClients; // 是 Spring AI 替每個 MCP server 建立的連線物件清單，目前在這個 controller 裡是用來做精準的 tool 篩選
+    private final List<McpSyncClient> mcpClients; // 已建立連線的 MCP server 清單，目前在這個 controller 裡是用來做精準的 tool 篩選
     private final ElicitationSessionStore elicitationSessionStore;
     private final ElicitationSseService elicitationSseService;
 
@@ -87,6 +89,7 @@ public class McpClientController {
             return handleElicitationChatResponse(chatPayload.message());
         }
 
+        // 選擇合適的 MCP tools：只選擇屬於 "secure-filesystem-server" 的 tools，且工具名稱為 "list_directory"
         ToolCallback[] toolCallbacks = ToolUtil.selectToolsFor(mcpClients, "secure-filesystem-server", "list_directory");
 
         return chatClient.prompt()
