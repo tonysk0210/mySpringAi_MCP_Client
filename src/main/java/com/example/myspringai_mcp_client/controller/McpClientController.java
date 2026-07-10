@@ -33,6 +33,9 @@ public class McpClientController {
     // 只做「把使用者自然語言輸入轉成 JSON」這件事，避免觸發不必要的 tool call。
     private ChatClient parserClient;
 
+    // 持有 advisor 的參考，以便在每次 API 呼叫開始時呼叫 reset()，重置呼叫計數器。
+    private final PrettyLoggerAdvisor prettyLoggerAdvisor = new PrettyLoggerAdvisor();
+
     private final List<McpSyncClient> mcpClients; // 已建立連線的 MCP server 清單，目前在這個 controller 裡是用來做精準的 tool 篩選
     private final ElicitationSessionStore elicitationSessionStore;
     private final ElicitationSseService elicitationSseService;
@@ -54,7 +57,7 @@ public class McpClientController {
                         當使用者詢問 GitHub 相關操作時，必須使用 GitHub MCP 工具（如 get_file_contents、list_files、search_repositories 等），絕對不可使用 filesystem 工具。
                         當使用者詢問本機檔案操作時，才使用 filesystem 工具。
                         """)
-                .defaultAdvisors(new TokenUsageAuditAdvisor(), new PrettyLoggerAdvisor())
+                .defaultAdvisors(new TokenUsageAuditAdvisor(), this.prettyLoggerAdvisor)
                 .defaultTools(toolCallbackProvider)
                 .build();
 
@@ -115,6 +118,9 @@ public class McpClientController {
          *       ▼  第一次被阻塞的 POST 解除，MCP server 繼續 createTicket
          *          LLM 最終回覆透過第一次的回應返回給前端
          */
+
+        // 正常 chat 流程：重置 logger 計數，讓本次請求的 LLM 呼叫從 #1 開始編號。
+        prettyLoggerAdvisor.reset();
 
         // 選擇合適的 MCP tools：只選擇屬於 "secure-filesystem-server" 的 tools，且工具名稱為 "list_directory"
         ToolCallback[] toolCallbacks = ToolUtil.selectToolsFor(mcpClients, "secure-filesystem-server", "list_directory");
@@ -209,6 +215,7 @@ public class McpClientController {
 
     @GetMapping("/summarize-tickets")
     public String summarizeTickets(@RequestHeader("username") String username) {
+        prettyLoggerAdvisor.reset();
         ToolCallback[] toolCallbacks = ToolUtil.selectToolsFor(mcpClients, "helpdesk-ticket-mcp-server-stdio", null);
         return chatClient.prompt()
                 .system("""
