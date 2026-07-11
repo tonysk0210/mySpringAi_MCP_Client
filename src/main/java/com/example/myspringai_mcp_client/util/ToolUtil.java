@@ -44,8 +44,8 @@ public class ToolUtil {
                 //         每個 client 對應一個 MCP server（例如 filesystem、github、helpdesk）。
                 .flatMap(client -> client.listTools().tools().stream()
                         // 步驟 2：雙重 hint 篩選。
-                        //   - client.getServerInfo().name()：server 在 MCP 協定層的名稱，
-                        //     與 application.properties 的 connection name 相同。
+                        //   - client.getServerInfo().name()：server 在 MCP 初始化回應中自報的名稱，
+                        //     來自 server 端的 spring.application.name，不一定等於 client 端 application.properties 的 connection key。
                         //   - tool.name()：MCP server 對外宣告的 tool 名稱（例如 "list_directory"）。
                         .filter(tool -> matches(client.getServerInfo().name(), serverName)
                                 && matches(tool.name(), toolName))

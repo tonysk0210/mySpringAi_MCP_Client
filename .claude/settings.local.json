@@ -12,7 +12,10 @@
       "Bash(Get-ChildItem -Path \"io\" -Recurse)",
       "Bash(Select-Object FullName)",
       "Bash(Remove-Item *)",
-      "Bash(npx ctx7@latest *)"
+      "Bash(npx ctx7@latest *)",
+      "Bash(jar -tf \"%USERPROFILE%\\\\.m2\\\\repository\\\\org\\\\springframework\\\\ai\\\\spring-ai-autoconfigure-mcp-client-common\\\\2.0.0\\\\spring-ai-autoconfigure-mcp-client-common-2.0.0.jar\")",
+      "Bash(findstr /i \"customizer\")",
+      "Bash(jar -tf \"C:\\\\Users\\\\tony.shangkuan\\\\.m2\\\\repository\\\\org\\\\springframework\\\\ai\\\\spring-ai-autoconfigure-mcp-client-common\\\\2.0.0\\\\spring-ai-autoconfigure-mcp-client-common-2.0.0.jar\")"
     ]
   }
 }
