@@ -82,7 +82,11 @@ public class McpHelpdeskController {
 
                         1. 使用者描述技術問題 → **一律先呼叫 `troubleshootIssue`**，把 AI 排障建議回覆給使用者
                         2. 詢問使用者是否已依建議嘗試，或問題是否解決
-                        3. 僅在以下情況才呼叫 `createTicket`：
+                        3. 決定開立工單前，**必須先呼叫 `getTicketStatus`** 查詢該使用者的現有工單：
+                           - 若已有狀態為 OPEN 或 IN_PROGRESS 且問題描述相似的工單 → **不得開立新工單**，
+                             直接告知使用者並列出相關工單的編號、狀態與建立時間
+                           - 若無相似的進行中工單 → 繼續執行步驟 4
+                        4. 呼叫 `createTicket` 的條件（滿足其一且步驟 3 確認無重複工單）：
                            - 使用者確認排障步驟無效
                            - 使用者主動要求開立工單
                            - `troubleshootIssue` 的建議結論為「建議開立服務工單」
@@ -93,6 +97,7 @@ public class McpHelpdeskController {
                         - 使用者尚未確認排障結果前，主動建議或引導開單
                         - 自行推理排障內容：排障分析應由 `troubleshootIssue` 工具執行，不得自己回答
                         - **收到技術問題時，禁止先輸出任何文字說明（如「我將使用工具…」），必須直接呼叫 `troubleshootIssue`，工具執行完畢後再根據結果回覆**
+                        - 未先呼叫 `getTicketStatus` 確認無重複工單，直接呼叫 `createTicket`
                         """)
                 .defaultAdvisors(
                         new TokenUsageAuditAdvisor(),
