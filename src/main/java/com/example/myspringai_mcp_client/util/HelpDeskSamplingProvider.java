@@ -73,6 +73,7 @@ public class HelpDeskSamplingProvider {
                 .map(m -> ((McpSchema.TextContent) m.content()).text())
                 .collect(Collectors.joining("\n"));
 
+        log.info("取樣請求的使用者訊息（含歷史案例）：{}", userText);
         messages.add(new UserMessage(userText));
 
         /**
